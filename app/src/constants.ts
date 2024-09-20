@@ -1,0 +1,1 @@
+export const MAX_BANKACCOUNTS_PER_USER = 2
