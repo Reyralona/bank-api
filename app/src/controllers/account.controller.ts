@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import ServerResponse from "../responses/server.response";
 import * as AccountService from "../services/account.service"
 import { logTransaction } from "../services/logging.service";
+import type { User } from "@prisma/client";
 
 export async function getAccountById(req: Request, res: Response, next: NextFunction){
     try{
@@ -32,7 +33,8 @@ export async function deleteAccount(req: Request, res: Response, next: NextFunct
 
 export async function userGetAccounts(req: Request, res: Response, next: NextFunction){
     try{
-        const accounts = await AccountService.userGetAccounts(req.user.id);
+        const user = req.user as User
+        const accounts = await AccountService.userGetAccounts(user.id);
         new ServerResponse(accounts, 200).send(res)
     } catch(err) {
         next(err)
@@ -41,8 +43,9 @@ export async function userGetAccounts(req: Request, res: Response, next: NextFun
 
 export async function getUserBalance(req: Request, res: Response, next: NextFunction){
     try{
+        const user = req.user as User
         const balance = await AccountService.getUserBalance(
-            req.user.id, req.params.bankaccountid
+            user.id, req.params.bankaccountid
         );
         new ServerResponse({
             "message": "Balance fetched successfully",
@@ -54,11 +57,12 @@ export async function getUserBalance(req: Request, res: Response, next: NextFunc
 }
 export async function userWithdraw(req: Request, res: Response, next: NextFunction){
 
-    const logString = `User ${req.user.id} withdrew ${req.body.amount} from account ${req.body.bankAccountId}`
+    const user = req.user as User
+    const logString = `User ${user.id} withdrew ${req.body.amount} from account ${req.body.bankAccountId}`
 
     try{
         const withdraw = await AccountService.userWithdraw(
-            req.user.id, req.body.bankAccountId, req.body.amount
+            user.id, req.body.bankAccountId, req.body.amount
         );
         new ServerResponse({
             "message": "Withdrawal successful",
@@ -73,11 +77,12 @@ export async function userWithdraw(req: Request, res: Response, next: NextFuncti
 }
 export async function userDeposit(req: Request, res: Response, next: NextFunction){
 
-    const logString = `User ${req.user.id} deposited ${req.body.amount} into account ${req.body.bankAccountId}`
+    const user = req.user as User
+    const logString = `User ${user.id} deposited ${req.body.amount} into account ${req.body.bankAccountId}`
 
     try{
         const deposit = await AccountService.userDeposit(
-            req.user.id, req.body.bankAccountId, req.body.amount
+            user.id, req.body.bankAccountId, req.body.amount
         );
         new ServerResponse({
             "message": "Deposit successful",
@@ -93,10 +98,11 @@ export async function userDeposit(req: Request, res: Response, next: NextFunctio
 
 export async function userTransferFunds(req: Request, res: Response, next: NextFunction){
 
-    const logString = `User ${req.user.id} transferred ${req.body.amount} from account ${req.body.fromId} to account ${req.body.toId}`
-
+    const user = req.user as User
+    const logString = `User ${user.id} transferred ${req.body.amount} from account ${req.body.fromId} to account ${req.body.toId}`
+    
     try{
-        const userId = req.user.id
+        const userId = user.id
         const { fromId, toId, amount } = req.body
         await AccountService.userTransferFunds(
             userId, fromId, toId, Number( amount )

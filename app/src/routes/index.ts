@@ -8,16 +8,45 @@ import Authorize from "../middlewares/authorize";
 import * as UserController from "../controllers/user.controller"
 import * as RoleController from "../controllers/role.controller"
 import * as AccountController from "../controllers/account.controller"
+import type { User } from "@prisma/client";
+import prisma from "../database";
 
 const router = Router()
 
 router.post("/auth", passport.authenticate("local"), Authenticate, (req, res, next) => {
     try{
+        console.log(req.user)
         new ServerResponse("Authenticaded successfully", 200).send(res)
     } catch(err) {
         next(err)
     }
 });
+
+router.get("/auth/validate", Authenticate, (req, res, next) => {
+    try{
+        const user = req.user as User
+        new ServerResponse(user, 200).send(res)
+    } catch(err) {
+        next(err)
+    }
+})
+
+router.get("/auth/dashboard", Authenticate, Authorize, async (req, res, next) => {
+    const numUsers = await prisma.user.count()
+    const numAccounts = await prisma.bankAccount.count()
+    const transactions = await prisma.bankLogs.count()
+    const totalBalance = (await prisma.bankAccount.aggregate({
+        _sum: {
+            Balance: true
+        }
+    }))._sum.Balance
+
+    new ServerResponse({
+        numUsers, numAccounts, transactions, totalBalance
+    }, 200).send(res)
+
+
+})
 
 // users
 router.get("/auth/user/:id", Authenticate, Authorize, UserController.getUserById)
@@ -29,7 +58,7 @@ router.delete("/auth/user/:id", Authenticate, Authorize, UserController.deleteUs
 router.get("/auth/role/:id", Authenticate, Authorize, RoleController.getRoleById)
 router.post("/auth/role", Authenticate, Authorize, RoleController.createRole)
 router.put("/auth/role/user/:userid/role/:roleid", Authenticate, Authorize, RoleController.addRoleToUser)
-router.delete("/auth/role/user/:userid/role/:roleid", Authenticate, Authorize, RoleController.removeRoleFromUser)
+router.delete("/auth/role/user/:userid/role/:roleid", Authenticate, Authorize, RoleController.removeRoleFromUser)   
 
 
 // accounts (user)

@@ -3,7 +3,6 @@ import prisma from "../database";
 import ServerError from "../errors/server.error";
 import { MAX_BANKACCOUNTS_PER_USER } from "../constants";
 
-
 export async function getAccountById(bankAccountId: string): Promise<BankAccount> {
     const account = await prisma.bankAccount.findUnique({
         where: {
@@ -38,6 +37,8 @@ export async function deleteAccount(bankAccountId: string): Promise<BankAccount>
         }
     })
 
+    if (!deletedAccount) throw new ServerError("Account not found", 404)
+
     return deletedAccount
 }
 
@@ -61,24 +62,29 @@ export async function getUserBalance(userId: number, bankAccountId: string): Pro
 }
 
 export async function userDeposit(userId: number, bankAccountId: string, amount: number): Promise<number> {
-    // cannot deposit negative values
-    // minimum deposit is 5
 
-    if (amount < 5) throw new ServerError("Minimum deposit is 5", 400)
     const account = await getAccountById(bankAccountId)
+    // user has to be owner
+    if (userId !== account.ownerId) throw new ServerError("Account not found for user", 404)
+
+    // minimum deposit is 5
+    if (amount < 5) throw new ServerError("Minimum deposit is 5", 400)
 
     const newBalance = account.Balance + amount
 
-    await prisma.bankAccount.update({
-        where: {
-            id: bankAccountId,
-            ownerId: userId
-        },
-        data: {
-            Balance: newBalance
-        }
-    })
+    const [transaction] = await prisma.$transaction([
+        prisma.bankAccount.update({
+            where: {
+                id: bankAccountId,
+                ownerId: userId
+            },
+            data: {
+                Balance: newBalance
+            }
+        })
+    ])
 
+    if (!transaction) throw new ServerError("Transaction failed", 500)
 
     return newBalance
 
@@ -86,46 +92,52 @@ export async function userDeposit(userId: number, bankAccountId: string, amount:
 }
 export async function userWithdraw(userId: number, bankAccountId: string, amount: number): Promise<number> {
     // cannot withdraw more than balance
-    // minimum withdraw is 5
 
     const account = await getAccountById(bankAccountId)
+    console.log(account)
+    if (userId !== account.ownerId) throw new ServerError("Account not found for user", 404)
 
+    // minimum withdraw is 5
     if (amount < 5) throw new ServerError("Minimum withdraw is 5", 400)
     if (amount > account.Balance) throw new ServerError("Cannot withdraw more than balance", 400)
 
     const newBalance = account.Balance - amount
-    await prisma.bankAccount.update({
-        where: {
-            id: bankAccountId,
-            ownerId: userId
-        },
-        data: {
-            Balance: newBalance
-        }
-    })
+    const [transaction] = await prisma.$transaction([
+        prisma.bankAccount.update({
+            where: {
+                id: bankAccountId,
+                ownerId: userId
+            },
+            data: {
+                Balance: newBalance
+            }
+        })
+    ])
 
-    
+    if(!transaction) throw new ServerError("Transaction failed", 500)
 
     return newBalance
 
 }
 
 export async function userTransferFunds(userId: number, fromId: string, toId: string, amount: number) {
-    // cannot transfer more than balance
-    // minimum transfer is 5
-    // cannot transfer to yourself
-
-    if (fromId === toId) throw new ServerError("Must transfer to another account", 400)
-    if (amount < 5) throw new ServerError("Minimum transfer is 5", 400)
-
+    
+    
     // can transfer to any account, from owners account
     const fromAccount = await getAccountById(fromId)
+    if (userId !== fromAccount.ownerId) throw new ServerError("Account not found for user", 404)
     const toAccount = await getAccountById(toId)
-
+    
+    
+    // cannot transfer to yourself
+    if (fromId === toId) throw new ServerError("Must transfer to another account", 400)
+    // minimum transfer is 5
+    if (amount < 5) throw new ServerError("Minimum transfer is 5", 400)    
+    // cannot transfer more than balance
     if (fromAccount.Balance < amount) throw new ServerError("Insufficient funds", 400)
 
 
-    await prisma.$transaction([
+    const [transaction] = await prisma.$transaction([
         // withdraw from source
         prisma.bankAccount.update({
             where: {
@@ -147,7 +159,6 @@ export async function userTransferFunds(userId: number, fromId: string, toId: st
         })
     ])
 
-
-
-
+    if(!transaction) throw new ServerError("Transaction failed", 500)
+        
 }
